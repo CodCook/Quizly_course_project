@@ -28,7 +28,8 @@ def get_study_session_by_id(session_id):
         supabase.table("study_sessions")
         .select("*")
         .eq("id", session_id)
-        .single()
         .execute()
     )
-    return response.data
+    if response.data and len(response.data) > 0:
+        return response.data[0]
+    return None
