@@ -10,6 +10,11 @@ load_dotenv()
 SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 SUPABASE_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY")
 
+if not SUPABASE_URL:
+    raise ValueError("NEXT_PUBLIC_SUPABASE_URL environment variable is required")
+if not SUPABASE_KEY:
+    raise ValueError("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY environment variable is required")
+
 class SupabaseResponse:
     def __init__(self, data, error=None):
         self.data = data
@@ -78,27 +83,17 @@ class TableClient:
         if query_string and self.method == "GET":
             endpoint += "?" + query_string
         
-        print(f"🔍 Making {self.method} request to: {endpoint}")
-        
         try:
             if self.method == "POST":
                 body = json.dumps(self.body).encode() if self.body else None
-                print(f"📤 Request body: {self.body}")
                 req = urllib.request.Request(endpoint, data=body, headers=headers, method=self.method)
             else:
                 req = urllib.request.Request(endpoint, headers=headers, method=self.method)
             
             with urllib.request.urlopen(req) as response:
                 data = json.loads(response.read().decode())
-                print(f"📥 Response: {data}")
                 return SupabaseResponse(data, None)
         except urllib.error.HTTPError as e:
-            print(f"❌ HTTP Error: {e.code} - {e.reason}")
-            try:
-                error_data = json.loads(e.read().decode())
-                print(f"❌ Error details: {error_data}")
-            except:
-                print(f"❌ Error response: {e.read().decode()}")
             return SupabaseResponse(None, str(e))
 
 supabase = SupabaseClient(SUPABASE_URL, SUPABASE_KEY)
