@@ -5,3 +5,7 @@ httpx
 pytest
 pytest-asyncio
 supabase
+google-generativeai
+PyPDF2
+python-docx
+requests
