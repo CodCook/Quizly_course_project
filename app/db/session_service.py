@@ -1,6 +1,12 @@
 from app.db.supabase_client import supabase
 
 
+def _require_success(response, operation_name: str):
+    if response.error:
+        raise RuntimeError(f"{operation_name} failed: {response.error}")
+    return response.data
+
+
 def save_study_session(input_text, summary, quiz, flashcards):
     data = {
         "input_text": input_text,
@@ -10,7 +16,8 @@ def save_study_session(input_text, summary, quiz, flashcards):
     }
 
     response = supabase.table("study_sessions").insert(data).execute()
-    return response.data
+    data = _require_success(response, "Save study session")
+    return data or []
 
 
 def get_all_study_sessions():
@@ -20,7 +27,8 @@ def get_all_study_sessions():
         .order("created_at", desc=True)
         .execute()
     )
-    return response.data
+    data = _require_success(response, "Fetch history")
+    return data or []
 
 
 def get_study_session_by_id(session_id):
@@ -30,6 +38,7 @@ def get_study_session_by_id(session_id):
         .eq("id", session_id)
         .execute()
     )
-    if response.data and len(response.data) > 0:
-        return response.data[0]
+    data = _require_success(response, "Fetch history item")
+    if data and len(data) > 0:
+        return data[0]
     return None

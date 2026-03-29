@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.routes.history import router as history_router
+from app.routes.upload import router as upload_router
 
 
 app = FastAPI(title="Quizly API")
@@ -36,3 +37,4 @@ def health():
 
 
 app.include_router(history_router, prefix="/api", tags=["History"])
+app.include_router(upload_router, prefix="/api", tags=["Upload"])
