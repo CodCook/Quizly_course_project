@@ -229,12 +229,66 @@ body {
   font-size: 0.93rem;
 }
 
-.state-ok {
-  color: var(--ok);
-}
-
 .state-bad {
   color: var(--bad);
+}
+
+.summary-display {
+  background: var(--card);
+  border: 1px solid var(--edge);
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.summary-title {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.summary-content {
+  margin: 1.2rem 0;
+  line-height: 1.7;
+}
+
+.summary-content h3 {
+  margin: 0 0 0.8rem;
+  font-size: 1.1rem;
+}
+
+.summary-content h4 {
+  margin: 1rem 0 0.45rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--brand-strong);
+}
+
+.summary-content p {
+  margin: 0.5rem 0;
+  color: var(--ink);
+}
+
+.summary-content ul,
+.summary-content ol {
+  margin: 0.45rem 0 0.75rem;
+  padding-left: 1.25rem;
+}
+
+.summary-content li {
+  margin: 0.35rem 0;
+}
+
+.summary-content strong {
+  color: #153f3b;
+}
+
+.summary-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.92em;
+  background: rgba(15, 118, 110, 0.08);
+  border: 1px solid rgba(15, 118, 110, 0.2);
+  border-radius: 6px;
+  padding: 0.1rem 0.35rem;
 }
 
 .reveal {

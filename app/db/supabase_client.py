@@ -1,19 +1,9 @@
 import os
-import json
-import urllib.request
-import urllib.error
-import urllib.parse
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
-SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-SUPABASE_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY")
-
-if not SUPABASE_URL:
-    raise ValueError("NEXT_PUBLIC_SUPABASE_URL environment variable is required")
-if not SUPABASE_KEY:
-    raise ValueError("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY environment variable is required")
 
 class SupabaseResponse:
     def __init__(self, data, error=None):
@@ -78,22 +68,46 @@ class TableClient:
             "Content-Type": "application/json"
         }
         
-        # Build query string for GET requests
-        query_string = "&".join([f"{k}={urllib.parse.quote(str(v))}" for k, v in self.query_params.items()])
-        if query_string and self.method == "GET":
-            endpoint += "?" + query_string
-        
         try:
             if self.method == "POST":
-                body = json.dumps(self.body).encode() if self.body else None
-                req = urllib.request.Request(endpoint, data=body, headers=headers, method=self.method)
+                response = requests.post(
+                    endpoint,
+                    json=self.body,
+                    headers=headers,
+                    timeout=10
+                )
             else:
-                req = urllib.request.Request(endpoint, headers=headers, method=self.method)
+                response = requests.get(
+                    endpoint,
+                    params=self.query_params,
+                    headers=headers,
+                    timeout=10
+                )
             
-            with urllib.request.urlopen(req) as response:
-                data = json.loads(response.read().decode())
-                return SupabaseResponse(data, None)
-        except urllib.error.HTTPError as e:
+            response.raise_for_status()
+            data = response.json()
+            return SupabaseResponse(data, None)
+        except requests.RequestException as e:
             return SupabaseResponse(None, str(e))
 
-supabase = SupabaseClient(SUPABASE_URL, SUPABASE_KEY)
+
+class _LazySupabase:
+    """Lazy-load Supabase credentials on first use."""
+    _instance = None
+    
+    def __getattr__(self, name):
+        if self._instance is None:
+            url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+            key = os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY")
+            
+            if not url:
+                raise ValueError("NEXT_PUBLIC_SUPABASE_URL environment variable is required")
+            if not key:
+                raise ValueError("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY environment variable is required")
+            
+            self._instance = SupabaseClient(url, key)
+        
+        return getattr(self._instance, name)
+
+
+supabase = _LazySupabase()
