@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quizly | Study Smarter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="background-glow glow-a"></div>
+    <div class="background-glow glow-b"></div>
+
+    <main class="page-shell">
+      <header class="app-header reveal">
+        <h1>Quizly</h1>
+        <p class="tagline">Turn your notes into summaries, quizzes, and flashcards</p>
+      </header>
+
+      <section class="upload-panel reveal delay-1">
+        <h2>Upload Your Notes</h2>
+        <div class="upload-dropzone" id="dropzone">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <p class="upload-text">Drag and drop your PDF or DOCX here</p>
+          <input type="file" id="file-input" accept=".pdf,.docx" hidden />
+          <button class="button solid" id="browse-button" type="button">Or browse files</button>
+        </div>
+      </section>
+
+      <section class="history-panel reveal delay-2">
+        <div class="panel-header">
+          <h2>Recent Study History</h2>
+          <button class="button tiny" id="reload-history" type="button">Reload</button>
+        </div>
+        <ul id="history-list" class="history-list">
+          <li class="history-empty">Loading history...</li>
+        </ul>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
