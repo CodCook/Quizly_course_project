@@ -88,7 +88,23 @@ class TableClient:
             data = response.json()
             return SupabaseResponse(data, None)
         except requests.RequestException as e:
-            return SupabaseResponse(None, str(e))
+            # Try to include response text for easier debugging when available
+            resp_text = None
+            try:
+                resp = getattr(e, "response", None)
+                if resp is None:
+                    resp = locals().get("response", None)
+                if resp is not None:
+                    resp_text = resp.text
+            except Exception:
+                resp_text = None
+
+            err_msg = str(e)
+            if resp_text:
+                # Avoid exposing secrets; include only response body to aid debugging
+                err_msg = f"{err_msg}; response_text={resp_text}"
+
+            return SupabaseResponse(None, err_msg)
 
 
 class _LazySupabase:
@@ -97,14 +113,21 @@ class _LazySupabase:
     
     def __getattr__(self, name):
         if self._instance is None:
-            url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-            key = os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY")
-            
+            # Prefer server-side credentials, fall back to public vars if missing
+            url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+            key = (
+                os.getenv("SUPABASE_SECRET_KEY")
+                or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+                or os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY")
+            )
+
             if not url:
-                raise ValueError("NEXT_PUBLIC_SUPABASE_URL environment variable is required")
+                raise ValueError("SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL environment variable is required")
             if not key:
-                raise ValueError("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY environment variable is required")
-            
+                raise ValueError(
+                    "One of SUPABASE_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY, or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY is required"
+                )
+
             self._instance = SupabaseClient(url, key)
         
         return getattr(self._instance, name)
