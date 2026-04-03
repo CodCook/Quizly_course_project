@@ -307,6 +307,75 @@ function setupDropzoneListeners() {
 
 setupDropzoneListeners();
 
+// Quiz by Topic logic
+const topicInput = document.getElementById("topic-input");
+const generateQuizBtn = document.getElementById("generate-quiz-btn");
+const quizResultContainer = document.getElementById("quiz-result-container");
+
+async function generateQuizFromTopic() {
+  const topic = topicInput.value.trim();
+  if (!topic) {
+    alert("Please enter a topic first.");
+    return;
+  }
+
+  try {
+    generateQuizBtn.disabled = true;
+    generateQuizBtn.textContent = "Generating...";
+    quizResultContainer.classList.add("hidden");
+    quizResultContainer.innerHTML = "";
+
+    const response = await fetch("/api/quiz/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic })
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ detail: "Failed to generate quiz" }));
+      throw new Error(err.detail || "Server error");
+    }
+
+    const data = await response.json();
+    displayQuizResults(data.quiz);
+  } catch (error) {
+    alert(`Error: ${error.message}`);
+  } finally {
+    generateQuizBtn.disabled = false;
+    generateQuizBtn.textContent = "Generate Quiz";
+  }
+}
+
+function displayQuizResults(questions) {
+  if (!questions || !questions.length) return;
+
+  const html = questions.map((q, i) => {
+    const optionsHtml = q.options.map(opt => `
+      <li class="quiz-option ${opt === q.answer ? 'correct' : ''}">
+        ${escapeHtml(opt)} ${opt === q.answer ? '✓' : ''}
+      </li>
+    `).join("");
+
+    return `
+      <div class="quiz-question">
+        <h4>${i + 1}. ${escapeHtml(q.question)}</h4>
+        <ul class="quiz-options">
+          ${optionsHtml}
+        </ul>
+      </div>
+    `;
+  }).join("");
+
+  quizResultContainer.innerHTML = html;
+  quizResultContainer.classList.remove("hidden");
+  quizResultContainer.scrollIntoView({ behavior: "smooth" });
+}
+
+generateQuizBtn.addEventListener("click", generateQuizFromTopic);
+topicInput.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") generateQuizFromTopic();
+});
+
 reloadHistoryButton.addEventListener("click", loadHistory);
 
 // Defer initial history load until page is fully loaded
