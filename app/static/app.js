@@ -132,18 +132,63 @@ async function loadHistory() {
 
     historyList.innerHTML = sessions
       .map((session) => {
-        const label = session.input_text || `Session #${session.id || "?"}`;
+        const label = session.filename || `Session #${session.id || "?"}`;
         return `
-          <li class="history-item">
-            <p class="history-item-title">${label}</p>
+          <li class="history-item" data-session-id="${session.id}">
+            <p class="history-item-title">${escapeHtml(label)}</p>
             <p class="history-item-time">${formatDate(session.created_at)}</p>
           </li>
         `;
       })
       .join("");
+    
+    // Add click listeners to history items
+    document.querySelectorAll(".history-item").forEach((item) => {
+      item.addEventListener("click", () => {
+        const sessionId = item.getAttribute("data-session-id");
+        loadSessionDetails(sessionId);
+      });
+    });
   } catch (error) {
     historyList.innerHTML = `<li class="history-empty state-bad">Could not load history: ${error.message}</li>`;
   }
+}
+
+async function loadSessionDetails(sessionId) {
+  try {
+    const response = await fetch(`/api/history/${sessionId}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const session = await response.json();
+    displaySessionSummary(session);
+  } catch (error) {
+    alert(`Error loading session: ${error.message}`);
+  }
+}
+
+function displaySessionSummary(session) {
+  const safeFileName = escapeHtml(session.filename || "Uploaded file");
+  const formattedSummary = formatSummaryText(session.summary);
+
+  uploadPanel.innerHTML = `
+    <h2>Summary Generated</h2>
+    <div class="summary-display">
+      <p class="summary-title"><strong>File:</strong> ${safeFileName}</p>
+      <div class="summary-content">
+        <h3>Summary</h3>
+        ${formattedSummary}
+      </div>
+      <button class="button ghost" id="new-upload-btn" type="button">Upload Another File</button>
+    </div>
+  `;
+  
+  document.getElementById("new-upload-btn").addEventListener("click", resetUpload);
+
+  // Ensure the user sees the summary panel after selecting a history item.
+  uploadPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 async function uploadFile(file) {
@@ -196,22 +241,11 @@ async function uploadFile(file) {
 }
 
 function displaySummary(result) {
-  const safeFileName = escapeHtml(result.filename || "Uploaded file");
-  const formattedSummary = formatSummaryText(result.summary);
-
-  uploadPanel.innerHTML = `
-    <h2>Summary Generated</h2>
-    <div class="summary-display">
-      <p class="summary-title"><strong>File:</strong> ${safeFileName}</p>
-      <div class="summary-content">
-        <h3>Summary</h3>
-        ${formattedSummary}
-      </div>
-      <button class="button ghost" id="new-upload-btn" type="button">Upload Another File</button>
-    </div>
-  `;
-  
-  document.getElementById("new-upload-btn").addEventListener("click", resetUpload);
+  const sessionData = {
+    filename: result.filename,
+    summary: result.summary
+  };
+  displaySessionSummary(sessionData);
 }
 
 function resetUpload() {
