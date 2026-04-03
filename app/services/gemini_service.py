@@ -127,3 +127,37 @@ def generate_study_materials(text: str) -> dict:
             flashcards = [item for item in f if isinstance(item, dict)]
 
     return {"summary": summary or "", "quiz": quiz or [], "flashcards": flashcards or []}
+
+
+def generate_quiz_from_topic(topic: str) -> list[dict]:
+    """Generate a quiz strictly constrained to a provided topic using Gemini.
+    
+    Returns a list of 5 multiple-choice question dicts.
+    Each dict matches: {'question': str, 'options': list[str], 'answer': str}.
+    """
+    model = _ensure_model()
+    
+    prompt = f"""Return ONLY valid JSON. Do not include any markdown, code fences, or explanatory text.
+    
+The JSON object must have exactly one key: "quiz".
+"quiz": an array of exactly 5 multiple-choice questions about the topic "{topic}".
+Each question in the array must be an object with:
+- "question" (string)
+- "options" (array of 4 distinct string choices)
+- "answer" (string, must exactly match one of the options)
+
+Do NOT use markdown code fences (```), do not add any explanation, and return only the JSON object.
+"""
+    
+    response = model.generate_content(prompt)
+    result_text = getattr(response, "text", None) or getattr(response, "content", None) or response
+    
+    parsed = _parse_json_from_text(result_text)
+    
+    quiz = []
+    if isinstance(parsed, dict):
+        q = parsed.get("quiz", [])
+        if isinstance(q, list):
+            quiz = [item for item in q if isinstance(item, dict)]
+            
+    return quiz
