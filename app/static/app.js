@@ -307,6 +307,167 @@ function setupDropzoneListeners() {
 
 setupDropzoneListeners();
 
+// Quiz by Topic State
+let currentQuizQuestions = [];
+let userAnswers = {};
+let quizTopic = "";
+
+const topicInput = document.getElementById("topic-input");
+const generateQuizBtn = document.getElementById("generate-quiz-btn");
+const quizModal = document.getElementById("quiz-modal");
+const closeQuizBtn = document.getElementById("close-quiz-btn");
+const submitQuizBtn = document.getElementById("submit-quiz-btn");
+const quizBody = document.getElementById("quiz-body");
+const quizTitle = document.getElementById("quiz-title");
+const quizProgress = document.getElementById("quiz-progress");
+
+async function generateQuizFromTopic() {
+  const topic = topicInput.value.trim();
+  if (!topic) {
+    alert("Please enter a topic first.");
+    return;
+  }
+
+  try {
+    generateQuizBtn.disabled = true;
+    generateQuizBtn.textContent = "Generating...";
+    
+    const response = await fetch("/api/quiz/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic })
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ detail: "Failed to generate quiz" }));
+      throw new Error(err.detail || "Server error");
+    }
+
+    const data = await response.json();
+    openQuizModal(topic, data.quiz);
+  } catch (error) {
+    alert(`Error: ${error.message}`);
+  } finally {
+    generateQuizBtn.disabled = false;
+    generateQuizBtn.textContent = "Generate Quiz";
+  }
+}
+
+function openQuizModal(topic, questions) {
+  currentQuizQuestions = questions;
+  quizTopic = topic;
+  userAnswers = {};
+  
+  quizTitle.textContent = `Quiz: ${topic}`;
+  quizModal.classList.remove("hidden");
+  submitQuizBtn.classList.remove("hidden");
+  submitQuizBtn.textContent = "Submit Quiz";
+  
+  renderQuestions();
+  updateProgress();
+}
+
+function renderQuestions() {
+  quizBody.innerHTML = currentQuizQuestions.map((q, qIdx) => `
+    <div class="quiz-question" id="q-${qIdx}">
+      <h4>${qIdx + 1}. ${escapeHtml(q.question)}</h4>
+      <div class="quiz-options-grid">
+        ${q.options.map((opt, oIdx) => `
+          <button class="quiz-option-btn" onclick="selectOption(${qIdx}, '${escapeHtml(opt)}')">
+            ${escapeHtml(opt)}
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
+window.selectOption = (qIdx, option) => {
+  if (submitQuizBtn.textContent === "Close Quiz") return; // Already submitted
+
+  userAnswers[qIdx] = option;
+  
+  // Update UI for the question
+  const btns = document.querySelectorAll(`#q-${qIdx} .quiz-option-btn`);
+  btns.forEach(btn => {
+    if (btn.textContent.trim() === option) {
+      btn.classList.add("selected");
+    } else {
+      btn.classList.remove("selected");
+    }
+  });
+  
+  updateProgress();
+};
+
+function updateProgress() {
+  const answeredCount = Object.keys(userAnswers).length;
+  quizProgress.textContent = `Answered ${answeredCount} of ${currentQuizQuestions.length}`;
+}
+
+async function submitQuiz() {
+  if (submitQuizBtn.textContent === "Close Quiz") {
+    closeQuizModal();
+    return;
+  }
+
+  const answeredCount = Object.keys(userAnswers).length;
+  if (answeredCount < currentQuizQuestions.length) {
+    if (!confirm("You haven't answered all questions. Submit anyway?")) return;
+  }
+
+  let score = 0;
+  currentQuizQuestions.forEach((q, idx) => {
+    const userAns = userAnswers[idx];
+    const isCorrect = userAns === q.answer;
+    if (isCorrect) score++;
+
+    // Mark buttons
+    const btns = document.querySelectorAll(`#q-${idx} .quiz-option-btn`);
+    btns.forEach(btn => {
+      const btnText = btn.textContent.trim();
+      btn.disabled = true;
+      if (btnText === q.answer) {
+        btn.classList.add("correct");
+        if (btnText === userAns) {
+          btn.innerHTML += " ✓";
+        }
+      } else if (btnText === userAns && !isCorrect) {
+        btn.classList.add("wrong");
+        btn.innerHTML += " ✗";
+      }
+    });
+  });
+
+  // Show score summary at top
+  const scoreHtml = `
+    <div class="results-summary reveal">
+      <p>Quiz Completed!</p>
+      <div class="score-display">${score} / ${currentQuizQuestions.length}</div>
+      <p>${score === currentQuizQuestions.length ? "Perfect score! Well done." : "Keep studying to improve your score!"}</p>
+    </div>
+    <hr style="opacity: 0.1; margin: 2rem 0;">
+  `;
+  quizBody.insertAdjacentHTML("afterbegin", scoreHtml);
+  
+  submitQuizBtn.textContent = "Close Quiz";
+  quizBody.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function closeQuizModal() {
+  quizModal.classList.add("hidden");
+  quizBody.innerHTML = "";
+  topicInput.value = "";
+}
+
+generateQuizBtn.addEventListener("click", generateQuizFromTopic);
+topicInput.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") generateQuizFromTopic();
+});
+
+closeQuizBtn.addEventListener("click", closeQuizModal);
+submitQuizBtn.addEventListener("click", submitQuiz);
+
 reloadHistoryButton.addEventListener("click", loadHistory);
 
 // Defer initial history load until page is fully loaded
