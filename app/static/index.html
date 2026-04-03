@@ -55,6 +55,22 @@
         </ul>
       </section>
     </main>
+    
+    <div id="quiz-modal" class="quiz-modal hidden">
+      <div class="modal-content reveal">
+        <div class="modal-header">
+          <h3 id="quiz-title">Quiz: Topic Name</h3>
+          <button class="close-btn" id="close-quiz-btn">&times;</button>
+        </div>
+        <div id="quiz-body" class="quiz-body">
+          <!-- Quiz content injected here -->
+        </div>
+        <div class="modal-footer">
+          <p id="quiz-progress" class="quiz-progress">Question 1 of 5</p>
+          <button class="button solid" id="submit-quiz-btn">Submit Quiz</button>
+        </div>
+      </div>
+    </div>
 
     <script src="/static/app.js"></script>
   </body>
