@@ -7,12 +7,13 @@ def _require_success(response, operation_name: str):
     return response.data
 
 
-def save_study_session(input_text, summary, quiz, flashcards):
+def save_study_session(input_text, summary, quiz, flashcards, filename=None):
     data = {
         "input_text": input_text,
         "summary": summary,
         "quiz_json": quiz,
         "flashcards_json": flashcards,
+        "filename": filename,
     }
 
     response = supabase.table("study_sessions").insert(data).execute()
@@ -28,6 +29,17 @@ def get_all_study_sessions():
         .execute()
     )
     data = _require_success(response, "Fetch history")
+    
+    # Extract filename from input_text (use first 50 chars as label)
+    if data:
+        for session in data:
+            if session.get("input_text"):
+                # Use first 50 chars of text as filename
+                text = session["input_text"]
+                session["filename"] = text[:50] + "..." if len(text) > 50 else text
+            else:
+                session["filename"] = f"Session #{session.get('id', '?')}"
+    
     return data or []
 
 

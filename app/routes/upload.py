@@ -57,7 +57,8 @@ async def upload_file(file: UploadFile = File(...)):
                 text,
                 summary=summary,
                 quiz=quiz,
-                flashcards=flashcards
+                flashcards=flashcards,
+                filename=filename
             )
             if session and isinstance(session, list) and len(session) > 0 and isinstance(session[0], dict):
                 session_id = session[0].get("id")
