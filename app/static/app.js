@@ -171,6 +171,7 @@ async function loadSessionDetails(sessionId) {
 function displaySessionSummary(session) {
   const safeFileName = escapeHtml(session.filename || "Uploaded file");
   const formattedSummary = formatSummaryText(session.summary);
+  const showQuizBtn = session.quiz && session.quiz.length > 0;
 
   uploadPanel.innerHTML = `
     <h2>Summary Generated</h2>
@@ -180,9 +181,18 @@ function displaySessionSummary(session) {
         <h3>Summary</h3>
         ${formattedSummary}
       </div>
-      <button class="button ghost" id="new-upload-btn" type="button">Upload Another File</button>
+      <div class="summary-actions">
+        ${showQuizBtn ? '<button class="button solid" id="practice-quiz-btn" type="button">Practice Quiz</button>' : ''}
+        <button class="button ghost" id="new-upload-btn" type="button">Upload Another File</button>
+      </div>
     </div>
   `;
+  
+  if (showQuizBtn) {
+    document.getElementById("practice-quiz-btn").addEventListener("click", () => {
+      openQuizModal(session.filename, session.quiz);
+    });
+  }
   
   document.getElementById("new-upload-btn").addEventListener("click", resetUpload);
 
@@ -222,7 +232,7 @@ async function uploadFile(file) {
     
     if (result.success) {
       currentSummary = result.summary;
-      displaySummary(result);
+      displaySessionSummary(result);
       // Refresh history panel and provide visual feedback
       historyList.innerHTML = '<li class="history-empty">Updating history...</li>';
       loadHistory();
@@ -241,11 +251,7 @@ async function uploadFile(file) {
 }
 
 function displaySummary(result) {
-  const sessionData = {
-    filename: result.filename,
-    summary: result.summary
-  };
-  displaySessionSummary(sessionData);
+  displaySessionSummary(result);
 }
 
 function resetUpload() {
@@ -272,6 +278,8 @@ function setupDropzoneListeners() {
   const fileInput = document.getElementById("file-input");
   const browseButton = document.getElementById("browse-button");
   
+  if (!dropzone || !fileInput || !browseButton) return;
+
   browseButton.addEventListener("click", () => {
     fileInput.click();
   });
@@ -307,51 +315,17 @@ function setupDropzoneListeners() {
 
 setupDropzoneListeners();
 
-// Quiz by Topic State
+// Quiz State
 let currentQuizQuestions = [];
 let userAnswers = {};
 let quizTopic = "";
 
-const topicInput = document.getElementById("topic-input");
-const generateQuizBtn = document.getElementById("generate-quiz-btn");
 const quizModal = document.getElementById("quiz-modal");
 const closeQuizBtn = document.getElementById("close-quiz-btn");
 const submitQuizBtn = document.getElementById("submit-quiz-btn");
 const quizBody = document.getElementById("quiz-body");
 const quizTitle = document.getElementById("quiz-title");
 const quizProgress = document.getElementById("quiz-progress");
-
-async function generateQuizFromTopic() {
-  const topic = topicInput.value.trim();
-  if (!topic) {
-    alert("Please enter a topic first.");
-    return;
-  }
-
-  try {
-    generateQuizBtn.disabled = true;
-    generateQuizBtn.textContent = "Generating...";
-    
-    const response = await fetch("/api/quiz/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic })
-    });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({ detail: "Failed to generate quiz" }));
-      throw new Error(err.detail || "Server error");
-    }
-
-    const data = await response.json();
-    openQuizModal(topic, data.quiz);
-  } catch (error) {
-    alert(`Error: ${error.message}`);
-  } finally {
-    generateQuizBtn.disabled = false;
-    generateQuizBtn.textContent = "Generate Quiz";
-  }
-}
 
 function openQuizModal(topic, questions) {
   currentQuizQuestions = questions;
@@ -457,16 +431,17 @@ async function submitQuiz() {
 function closeQuizModal() {
   quizModal.classList.add("hidden");
   quizBody.innerHTML = "";
-  topicInput.value = "";
 }
-
-generateQuizBtn.addEventListener("click", generateQuizFromTopic);
-topicInput.addEventListener("keypress", (e) => {
-  if (e.key === "Enter") generateQuizFromTopic();
-});
 
 closeQuizBtn.addEventListener("click", closeQuizModal);
 submitQuizBtn.addEventListener("click", submitQuiz);
+
+reloadHistoryButton.addEventListener("click", loadHistory);
+
+// Defer initial history load until page is fully loaded
+window.addEventListener("load", () => {
+  loadHistory();
+});
 
 reloadHistoryButton.addEventListener("click", loadHistory);
 
