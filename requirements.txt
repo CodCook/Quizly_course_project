@@ -8,5 +8,6 @@ supabase
 google-generativeai
 PyPDF2
 python-docx
+python-pptx
 requests
 python-multipart
