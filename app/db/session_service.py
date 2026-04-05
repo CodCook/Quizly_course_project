@@ -7,6 +7,15 @@ def _require_success(response, operation_name: str):
     return response.data
 
 
+def _normalize_session_payload(session: dict) -> dict:
+    normalized = dict(session)
+    if "quiz" not in normalized:
+        normalized["quiz"] = normalized.get("quiz_json", []) or []
+    if "flashcards" not in normalized:
+        normalized["flashcards"] = normalized.get("flashcards_json", []) or []
+    return normalized
+
+
 def save_study_session(input_text, summary, quiz, flashcards, filename=None):
     data = {
         "input_text": input_text,
@@ -52,5 +61,5 @@ def get_study_session_by_id(session_id):
     )
     data = _require_success(response, "Fetch history item")
     if data and len(data) > 0:
-        return data[0]
+        return _normalize_session_payload(data[0])
     return None
