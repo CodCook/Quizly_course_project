@@ -94,6 +94,16 @@ def _parse_json_from_text(s: str):
     return None
 
 
+def _ensure_even_flashcards(flashcards: list[dict]) -> list[dict]:
+    """Guarantee an even number of flashcards.
+
+    If the model returns an odd count, trim the final card.
+    """
+    if len(flashcards) % 2 == 1:
+        return flashcards[:-1]
+    return flashcards
+
+
 def generate_study_materials(text: str) -> dict:
     """Generate study materials (summary, quiz, flashcards) using Gemini.
 
@@ -102,7 +112,7 @@ def generate_study_materials(text: str) -> dict:
     """
     model = _ensure_model()
 
-    prompt = f"""Return ONLY valid JSON. Do not include any markdown, code fences, or explanatory text.\n\nThe JSON object must have exactly these keys: \"summary\", \"quiz\", \"flashcards\".\n\n- \"summary\": a single concise study summary (string).\n- \"quiz\": an array of 5 multiple-choice questions. Each question must be an object with keys: \"question\" (string), \"options\" (array of 4 strings), \"answer\" (string, exactly one of the options).\n- \"flashcards\": an array of 5 objects with keys: \"term\" and \"definition\" (both strings).\n\nDo NOT use markdown code fences (```), do not add any explanation or extra fields, and return only the JSON object.\n\nText:\n{text}\n"""
+    prompt = f"""Return ONLY valid JSON. Do not include any markdown, code fences, or explanatory text.\n\nThe JSON object must have exactly these keys: \"summary\", \"quiz\", \"flashcards\".\n\n- \"summary\": a single concise study summary (string).\n- \"quiz\": an array of 5 multiple-choice questions. Each question must be an object with keys: \"question\" (string), \"options\" (array of 4 strings), \"answer\" (string, exactly one of the options).\n- \"flashcards\": an array of 6 objects with keys: \"term\" and \"definition\" (both strings). The number of flashcards must be EVEN.\n\nDo NOT use markdown code fences (```), do not add any explanation or extra fields, and return only the JSON object.\n\nText:\n{text}\n"""
 
     response = model.generate_content(prompt)
     result_text = getattr(response, "text", None) or getattr(response, "content", None) or response
@@ -125,6 +135,8 @@ def generate_study_materials(text: str) -> dict:
         f = parsed.get("flashcards", [])
         if isinstance(f, list):
             flashcards = [item for item in f if isinstance(item, dict)]
+
+    flashcards = _ensure_even_flashcards(flashcards)
 
     return {"summary": summary or "", "quiz": quiz or [], "flashcards": flashcards or []}
 
