@@ -27,8 +27,10 @@ def test_save_study_session_inserts_expected_payload_and_returns_data():
     mock_table.insert.return_value = mock_table
     mock_table.execute.return_value = _make_response(error=None, data=[{"id": "abc"}])
 
-    with patch("app.db.session_service.supabase") as mock_supabase:
-        mock_supabase.table.return_value = mock_table
+    mock_client = MagicMock()
+    mock_client.table.return_value = mock_table
+
+    with patch.object(session_service.supabase, "_instance", mock_client):
         result = session_service.save_study_session(
             "input text",
             "a summary",
@@ -62,8 +64,10 @@ def test_get_all_study_sessions_formats_and_returns_list():
     mock_table.order.return_value = mock_table
     mock_table.execute.return_value = _make_response(error=None, data=sample_data)
 
-    with patch("app.db.session_service.supabase") as mock_supabase:
-        mock_supabase.table.return_value = mock_table
+    mock_client = MagicMock()
+    mock_client.table.return_value = mock_table
+
+    with patch.object(session_service.supabase, "_instance", mock_client):
         result = session_service.get_all_study_sessions()
 
     by_id = {r["id"]: r for r in result}
@@ -76,18 +80,22 @@ def test_get_study_session_by_id_returns_item_or_none():
     mock_table = MagicMock()
     mock_table.select.return_value = mock_table
     mock_table.eq.return_value = mock_table
-    mock_table.execute.return_value = _make_response(error=None, data=[{"id": "42", "input_text": "abc"}])
+    mock_table.execute.return_value = _make_response(
+        error=None,
+        data=[{"id": "42", "input_text": "abc"}],
+    )
 
-    with patch("app.db.session_service.supabase") as mock_supabase:
-        mock_supabase.table.return_value = mock_table
+    mock_client = MagicMock()
+    mock_client.table.return_value = mock_table
+
+    with patch.object(session_service.supabase, "_instance", mock_client):
         item = session_service.get_study_session_by_id("42")
 
     assert item["id"] == "42"
 
-    # now test empty result
     mock_table.execute.return_value = _make_response(error=None, data=[])
-    with patch("app.db.session_service.supabase") as mock_supabase2:
-        mock_supabase2.table.return_value = mock_table
+
+    with patch.object(session_service.supabase, "_instance", mock_client):
         none_item = session_service.get_study_session_by_id("missing")
 
     assert none_item is None
