@@ -612,6 +612,9 @@ setupDropzoneListeners();
 let currentQuizQuestions = [];
 let userAnswers = {};
 
+const topicInput = document.getElementById("topic-input");
+const generateQuizBtn = document.getElementById("generate-quiz-btn");
+
 const quizModal = document.getElementById("quiz-modal");
 const closeQuizBtn = document.getElementById("close-quiz-btn");
 const submitQuizBtn = document.getElementById("submit-quiz-btn");
@@ -727,3 +730,43 @@ reloadHistoryButton.addEventListener("click", loadHistory);
 window.addEventListener("load", () => {
   loadHistory();
 });
+
+// --- Topic Quiz Logic --- //
+if (generateQuizBtn && topicInput) {
+  async function generateQuizFromTopic() {
+    const topic = topicInput.value.trim();
+    if (!topic) {
+      alert("Please enter a topic first.");
+      return;
+    }
+
+    try {
+      generateQuizBtn.disabled = true;
+      generateQuizBtn.textContent = "Generating...";
+      
+      const response = await fetch("/api/quiz/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic })
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: "Failed to generate quiz" }));
+        throw new Error(err.detail || "Server error");
+      }
+
+      const data = await response.json();
+      openQuizModal(topic, data.quiz);
+    } catch (error) {
+      alert(`Error: ${error.message}`);
+    } finally {
+      generateQuizBtn.disabled = false;
+      generateQuizBtn.textContent = "Generate Quiz";
+    }
+  }
+
+  generateQuizBtn.addEventListener("click", generateQuizFromTopic);
+  topicInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") generateQuizFromTopic();
+  });
+}
