@@ -1,6 +1,10 @@
 const historyList = document.getElementById("history-list");
 const reloadHistoryButton = document.getElementById("reload-history");
 const uploadPanel = document.querySelector(".upload-panel");
+const mainView = document.getElementById("main-view");
+const historyView = document.getElementById("history-view");
+const navMainButton = document.getElementById("nav-main");
+const navHistoryButton = document.getElementById("nav-history");
 
 let currentUploadId = null;
 let currentUploadFilename = null;
@@ -194,6 +198,29 @@ function formatDate(value) {
   return date.toLocaleString();
 }
 
+function setActivePage(page) {
+  const showMain = page === "main";
+  const showHistory = page === "history";
+
+  if (mainView) {
+    mainView.classList.toggle("active", showMain);
+  }
+  if (historyView) {
+    historyView.classList.toggle("active", showHistory);
+  }
+
+  if (navMainButton) {
+    navMainButton.classList.toggle("active", showMain);
+  }
+  if (navHistoryButton) {
+    navHistoryButton.classList.toggle("active", showHistory);
+  }
+
+  if (showHistory) {
+    loadHistory();
+  }
+}
+
 function animatePanelSwap(renderFn) {
   if (!uploadPanel) {
     renderFn();
@@ -364,6 +391,7 @@ async function loadSessionDetails(sessionId) {
       throw new Error("Session not found in this browser session");
     }
 
+    setActivePage("main");
     showHistoryMaterialChooser(normalizeSession(session));
   } catch (error) {
     alert(`Error loading session: ${error.message}`);
@@ -933,6 +961,12 @@ function closeQuizModal() {
 closeQuizBtn.addEventListener("click", closeQuizModal);
 submitQuizBtn.addEventListener("click", submitQuiz);
 reloadHistoryButton.addEventListener("click", loadHistory);
+if (navMainButton) {
+  navMainButton.addEventListener("click", () => setActivePage("main"));
+}
+if (navHistoryButton) {
+  navHistoryButton.addEventListener("click", () => setActivePage("history"));
+}
 window.addEventListener("load", () => {
-  loadHistory();
+  setActivePage("main");
 });
