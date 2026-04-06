@@ -155,10 +155,10 @@ source .venv/bin/activate
 ```bash
 pip install -r requirements.txt
 ```
-### 4. Create a .env file
+### 4. Create a `.env` file
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your_supabase_publishable_key
+SUPABASE_SECRET_KEY=your_supabase_secret_key
 GEMINI_API_KEY=your_gemini_api_key
 ```
 ### 5. Run the app (development)
@@ -198,22 +198,20 @@ http://127.0.0.1:8000/
 http://127.0.0.1:8000/health
 
 ---
-## Docker Instructions
-CI/CD Pipeline
+## CI/CD Pipeline
 
 Quizly uses GitHub Actions for CI and Render for deployment.
 
-- CI
+- CI  
 On every push and pull request, the pipeline:
+- checks out the code
+- installs dependencies
+- runs the full pytest suite
+- builds the Docker image
+- starts a container from the built image
+- performs a smoke test against the `/health` endpoint
 
-checks out the code
-installs dependencies
-runs the full pytest suite
-builds the Docker image
-starts a container from the built image
-performs a smoke test against the /health endpoint
-
-- CD
+- CD  
 After successful integration and deployment, the latest version of the application is available on Render at:
 
 https://quizly-whkk.onrender.com/
