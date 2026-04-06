@@ -89,6 +89,46 @@ body {
   margin-right: auto;
 }
 
+.page-nav {
+  display: flex;
+  width: min(600px, 100%);
+  gap: 0.4rem;
+  padding: 0.3rem;
+  border: 1px solid rgba(15, 118, 110, 0.38);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.page-nav .page-nav-btn {
+  flex: 1;
+  border-radius: 12px;
+  padding: 0.58rem 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transform: none !important;
+  box-shadow: none;
+  border-color: rgba(15, 118, 110, 0.28);
+}
+
+.page-nav .page-nav-btn.active {
+  background: linear-gradient(120deg, var(--brand), var(--brand-strong));
+  color: #f7fffd;
+  border-color: rgba(9, 69, 64, 0.18);
+  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.22);
+}
+
+.page-nav .page-nav-btn:not(.active) {
+  background: rgba(15, 118, 110, 0.14);
+  color: #1f3b37;
+}
+
+.page-nav .page-nav-btn:not(.active):hover {
+  background: rgba(15, 118, 110, 0.24);
+  color: var(--ink);
+  border-color: rgba(15, 118, 110, 0.45);
+}
+
 .page-view {
   display: none;
   width: 100%;
