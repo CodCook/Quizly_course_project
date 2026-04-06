@@ -1,13 +1,13 @@
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Header
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from app.services.document_extractor import extract_text_from_upload, is_supported_upload
 from app.services.gemini_service import generate_study_materials, generate_summary
-from app.db.session_service import save_study_session
+from app.db.session_service import save_study_session, update_study_session_materials
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ async def upload_file(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="No text could be extracted from file")
 
         upload_id = str(uuid4())
-        _UPLOAD_CACHE[upload_id] = {"text": text, "filename": filename}
+        _UPLOAD_CACHE[upload_id] = {"text": text, "filename": filename, "session_id": ""}
 
         return {
             "success": True,
@@ -69,7 +69,10 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @router.post("/upload/generate")
-async def generate_from_uploaded_file(payload: GenerateUploadRequest):
+async def generate_from_uploaded_file(
+    payload: GenerateUploadRequest,
+    x_client_key: str | None = Header(default=None),
+):
     upload_id = (payload.upload_id or "").strip()
     action = (payload.action or "").strip().lower()
 
@@ -84,6 +87,7 @@ async def generate_from_uploaded_file(payload: GenerateUploadRequest):
 
     text = cached["text"]
     filename = cached["filename"]
+    existing_session_id = (cached.get("session_id") or "").strip()
 
     try:
         materials = await run_in_threadpool(generate_study_materials, text)
@@ -111,18 +115,32 @@ async def generate_from_uploaded_file(payload: GenerateUploadRequest):
     filtered_flashcards = flashcards if action == "flashcards" else []
     filtered_flashcards = _ensure_even_flashcards(filtered_flashcards)
 
-    session_id = None
+    session_id = existing_session_id or None
     try:
-        session = await run_in_threadpool(
-            save_study_session,
-            text,
-            summary=filtered_summary,
-            quiz=filtered_quiz,
-            flashcards=filtered_flashcards,
-            filename=filename,
-        )
-        if session and isinstance(session, list) and len(session) > 0 and isinstance(session[0], dict):
-            session_id = session[0].get("id")
+        if existing_session_id:
+            await run_in_threadpool(
+                update_study_session_materials,
+                existing_session_id,
+                summary=filtered_summary if action == "summary" else None,
+                quiz=filtered_quiz if action == "quiz" else None,
+                flashcards=filtered_flashcards if action == "flashcards" else None,
+                client_key=x_client_key,
+            )
+            session_id = existing_session_id
+        else:
+            session = await run_in_threadpool(
+                save_study_session,
+                text,
+                summary=filtered_summary,
+                quiz=filtered_quiz,
+                flashcards=filtered_flashcards,
+                filename=filename,
+                client_key=x_client_key,
+            )
+            if session and isinstance(session, list) and len(session) > 0 and isinstance(session[0], dict):
+                session_id = session[0].get("id")
+                if session_id:
+                    cached["session_id"] = str(session_id)
     except Exception:
         logger.exception("Database save failed; returning generated materials without persistence")
 

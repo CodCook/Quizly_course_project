@@ -1,6 +1,7 @@
 import os
 import json
 import re
+from uuid import uuid4
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -111,8 +112,9 @@ def generate_study_materials(text: str) -> dict:
     to parse the model output. If parsing fails, returns safe defaults.
     """
     model = _ensure_model()
+    run_id = uuid4().hex[:10]
 
-    prompt = f"""Return ONLY valid JSON. Do not include any markdown, code fences, or explanatory text.\n\nThe JSON object must have exactly these keys: \"summary\", \"quiz\", \"flashcards\".\n\n- \"summary\": a single concise study summary (string).\n- \"quiz\": an array of 5 multiple-choice questions. Each question must be an object with keys: \"question\" (string), \"options\" (array of 4 strings), \"answer\" (string, exactly one of the options).\n- \"flashcards\": an array of 6 objects with keys: \"term\" and \"definition\" (both strings). The number of flashcards must be EVEN.\n\nDo NOT use markdown code fences (```), do not add any explanation or extra fields, and return only the JSON object.\n\nText:\n{text}\n"""
+    prompt = f"""Return ONLY valid JSON. Do not include any markdown, code fences, or explanatory text.\n\nThe JSON object must have exactly these keys: \"summary\", \"quiz\", \"flashcards\".\n\n- \"summary\": a single concise study summary (string).\n- \"quiz\": an array of 5 multiple-choice questions. Each question must be an object with keys: \"question\" (string), \"options\" (array of 4 strings), \"answer\" (string, exactly one of the options).\n- \"flashcards\": an array of 6 objects with keys: \"term\" and \"definition\" (both strings). The number of flashcards must be EVEN.\n\nCreate a fresh variation for this run id: {run_id}. Vary the quiz wording/focus from typical outputs while staying faithful to the text.\n\nDo NOT use markdown code fences (```), do not add any explanation or extra fields, and return only the JSON object.\n\nText:\n{text}\n"""
 
     response = model.generate_content(prompt)
     result_text = getattr(response, "text", None) or getattr(response, "content", None) or response
@@ -173,3 +175,68 @@ Do NOT use markdown code fences (```), do not add any explanation, and return on
             quiz = [item for item in q if isinstance(item, dict)]
             
     return quiz
+
+
+def generate_quiz_from_text(text: str) -> list[dict]:
+    """Generate quiz questions directly from source text.
+
+    Returns a list of quiz question objects.
+    """
+    model = _ensure_model()
+    run_id = uuid4().hex[:10]
+
+    prompt = f"""Return ONLY valid JSON. Do not include markdown, code fences, or explanatory text.
+
+The JSON object must have exactly one key: "quiz".
+"quiz" must be an array of exactly 5 objects. Each object must include:
+- "question" (string)
+- "options" (array of 4 distinct strings)
+- "answer" (string, exactly one of the options)
+
+Create a fresh variation of quiz questions for this run id: {run_id}.
+Vary question wording and focus areas compared to typical quiz outputs.
+
+Text:
+{text}
+"""
+
+    response = model.generate_content(prompt)
+    result_text = getattr(response, "text", None) or getattr(response, "content", None) or response
+    parsed = _parse_json_from_text(result_text)
+
+    if isinstance(parsed, dict) and isinstance(parsed.get("quiz"), list):
+        return [item for item in parsed.get("quiz", []) if isinstance(item, dict)]
+
+    return []
+
+
+def generate_flashcards_from_text(text: str) -> list[dict]:
+    """Generate flashcards directly from source text.
+
+    Returns a list of flashcard objects with an even count.
+    """
+    model = _ensure_model()
+
+    prompt = f"""Return ONLY valid JSON. Do not include markdown, code fences, or explanatory text.
+
+The JSON object must have exactly one key: "flashcards".
+"flashcards" must be an array of exactly 6 objects.
+Each object must include:
+- "term" (string)
+- "definition" (string)
+
+The number of flashcards must be EVEN.
+
+Text:
+{text}
+"""
+
+    response = model.generate_content(prompt)
+    result_text = getattr(response, "text", None) or getattr(response, "content", None) or response
+    parsed = _parse_json_from_text(result_text)
+
+    flashcards = []
+    if isinstance(parsed, dict) and isinstance(parsed.get("flashcards"), list):
+        flashcards = [item for item in parsed.get("flashcards", []) if isinstance(item, dict)]
+
+    return _ensure_even_flashcards(flashcards)
