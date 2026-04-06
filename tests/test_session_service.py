@@ -99,3 +99,45 @@ def test_get_study_session_by_id_returns_item_or_none():
         none_item = session_service.get_study_session_by_id("missing")
 
     assert none_item is None
+
+
+def test_update_study_session_materials_updates_and_returns_normalized_item():
+    mock_table = MagicMock()
+    mock_table.update.return_value = mock_table
+    mock_table.eq.return_value = mock_table
+    mock_table.execute.return_value = _make_response(
+        error=None,
+        data=[
+            {
+                "id": "42",
+                "input_text": "This is input text",
+                "summary": "Updated summary",
+                "quiz_json": [{"question": "Q1"}],
+                "flashcards_json": [{"term": "T1", "definition": "D1"}],
+                "filename": None,
+            }
+        ],
+    )
+
+    mock_client = MagicMock()
+    mock_client.table.return_value = mock_table
+
+    with patch.object(session_service.supabase, "_instance", mock_client):
+        updated = session_service.update_study_session_materials(
+            "42",
+            summary="Updated summary",
+            quiz=[{"question": "Q1"}],
+            flashcards=[{"term": "T1", "definition": "D1"}],
+        )
+
+    mock_table.update.assert_called_once_with(
+        {
+            "summary": "Updated summary",
+            "quiz_json": [{"question": "Q1"}],
+            "flashcards_json": [{"term": "T1", "definition": "D1"}],
+        }
+    )
+    assert updated["id"] == "42"
+    assert updated["summary"] == "Updated summary"
+    assert updated["quiz"] == [{"question": "Q1"}]
+    assert updated["flashcards"] == [{"term": "T1", "definition": "D1"}]

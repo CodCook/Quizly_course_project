@@ -42,6 +42,12 @@ class TableClient:
         self.method = "POST"
         self.body = data
         return self
+
+    def update(self, data):
+        """Update data"""
+        self.method = "PATCH"
+        self.body = data
+        return self
     
     def order(self, column, desc=False):
         """Order by column"""
@@ -67,11 +73,21 @@ class TableClient:
             "Authorization": f"Bearer {self.client.key}",
             "Content-Type": "application/json"
         }
+        if self.method == "PATCH":
+            headers["Prefer"] = "return=representation"
         
         try:
             if self.method == "POST":
                 response = requests.post(
                     endpoint,
+                    json=self.body,
+                    headers=headers,
+                    timeout=10
+                )
+            elif self.method == "PATCH":
+                response = requests.patch(
+                    endpoint,
+                    params=self.query_params,
                     json=self.body,
                     headers=headers,
                     timeout=10
