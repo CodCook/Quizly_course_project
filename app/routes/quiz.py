@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Dict
 
 from app.services.gemini_service import generate_quiz_from_topic
 

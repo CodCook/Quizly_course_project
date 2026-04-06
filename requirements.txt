@@ -11,3 +11,4 @@ python-docx
 python-pptx
 requests
 python-multipart
+ruff
