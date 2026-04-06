@@ -63,3 +63,27 @@ def get_study_session_by_id(session_id):
     if data and len(data) > 0:
         return _normalize_session_payload(data[0])
     return None
+
+
+def update_study_session_materials(session_id, summary=None, quiz=None, flashcards=None):
+    update_payload = {}
+    if summary is not None:
+        update_payload["summary"] = summary
+    if quiz is not None:
+        update_payload["quiz_json"] = quiz
+    if flashcards is not None:
+        update_payload["flashcards_json"] = flashcards
+
+    if not update_payload:
+        return None
+
+    response = (
+        supabase.table("study_sessions")
+        .update(update_payload)
+        .eq("id", session_id)
+        .execute()
+    )
+    data = _require_success(response, "Update study session")
+    if data and len(data) > 0:
+        return _normalize_session_payload(data[0])
+    return None
