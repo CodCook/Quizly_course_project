@@ -297,12 +297,7 @@ function writeSessionHistoryEntries(entries) {
 }
 
 function initializeSessionHistory() {
-  // Treat each page load as a fresh user session for the sidebar history.
-  try {
-    window.sessionStorage.removeItem(SESSION_HISTORY_STORAGE_KEY);
-  } catch {
-    // Ignore storage access failures.
-  }
+  // Keep entries between refreshes in this browser tab session.
 }
 
 function addSessionHistoryEntry(session) {
@@ -352,10 +347,38 @@ async function loadHistory() {
   historyList.innerHTML = '<li class="history-empty">Loading history...</li>';
 
   try {
-    const sessions = readSessionHistoryEntries();
+    const response = await fetch("/api/history");
+    if (!response.ok) {
+      throw new Error(`Failed to fetch history: ${response.statusText}`);
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    const dbSessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+    const localSessions = readSessionHistoryEntries();
+
+    // Merge DB history with current-tab entries to keep freshly generated local state.
+    const sessionMap = new Map();
+    dbSessions.forEach((session) => {
+      const id = String(session.id || "");
+      if (id) {
+        sessionMap.set(id, normalizeSession(session));
+      }
+    });
+    localSessions.forEach((session) => {
+      const id = String(session.id || "");
+      if (!id) return;
+      const existing = sessionMap.get(id);
+      sessionMap.set(id, existing ? { ...existing, ...normalizeSession(session) } : normalizeSession(session));
+    });
+
+    const sessions = [...sessionMap.values()].sort((a, b) => {
+      const at = new Date(a.created_at || 0).getTime();
+      const bt = new Date(b.created_at || 0).getTime();
+      return bt - at;
+    });
 
     if (!sessions.length) {
-      historyList.innerHTML = '<li class="history-empty">No uploads in this session yet. Upload and generate to build your history.</li>';
+      historyList.innerHTML = '<li class="history-empty">No history yet. Upload a file to get started.</li>';
       return;
     }
 
@@ -384,11 +407,18 @@ async function loadHistory() {
 
 async function loadSessionDetails(sessionId) {
   try {
-    const sessions = readSessionHistoryEntries();
-    const session = sessions.find((item) => String(item.id) === String(sessionId));
+    let session = null;
+    const response = await fetch(`/api/history/${encodeURIComponent(String(sessionId))}`);
+    if (response.ok) {
+      session = normalizeSession(await response.json());
+    } else {
+      // Fallback to current-tab cache for unsaved/temporary entries.
+      const sessions = readSessionHistoryEntries();
+      session = sessions.find((item) => String(item.id) === String(sessionId)) || null;
+    }
 
     if (!session) {
-      throw new Error("Session not found in this browser session");
+      throw new Error("Session not found");
     }
 
     setActivePage("main");
@@ -411,7 +441,7 @@ function showHistoryMaterialChooser(session) {
       <p class="upload-text">Select what you want to open from this file.</p>
       <div class="summary-actions">
         <button class="button ${hasSummary ? "solid" : "ghost"}" id="open-history-summary-btn" type="button">${hasSummary ? "Summary" : "Generate Summary"}</button>
-        <button class="button ${hasQuiz ? "solid" : "ghost"}" id="open-history-quiz-btn" type="button">${hasQuiz ? "Quiz" : "Generate Quiz"}</button>
+        <button class="button ${hasQuiz ? "solid" : "ghost"}" id="open-history-quiz-btn" type="button">${hasQuiz ? "Generate New Quiz" : "Generate Quiz"}</button>
         <button class="button ${hasFlashcards ? "solid" : "ghost"}" id="open-history-flashcards-btn" type="button">${hasFlashcards ? "Flashcards" : "Generate Flashcards"}</button>
         <button class="button ghost" id="new-upload-btn" type="button">Upload Another File</button>
       </div>
@@ -433,10 +463,7 @@ function showHistoryMaterialChooser(session) {
 
     if (quizBtn) {
       quizBtn.addEventListener("click", async () => {
-        if (hasQuiz) {
-          displayQuizReady(session);
-          return;
-        }
+        // Always generate a fresh quiz for this session.
         await generateFromHistorySession(session, "quiz");
       });
     }
@@ -540,6 +567,7 @@ function displaySessionSummary(session) {
   const formattedSummary = formatSummaryText(session.summary);
   const showQuizBtn = session.quiz.length > 0;
   const canGenerateQuizNow = !showQuizBtn && Boolean(currentUploadId);
+  const canRegenerateFromHistory = Boolean(session.session_id || session.upload_id);
 
   renderUploadPanel(`
     <h2>Summary Generated</h2>
@@ -550,14 +578,22 @@ function displaySessionSummary(session) {
         ${formattedSummary}
       </div>
       <div class="summary-actions">
-        ${showQuizBtn ? '<button class="button solid" id="practice-quiz-btn" type="button">Practice Quiz</button>' : ""}
+        ${showQuizBtn ? '<button class="button solid" id="practice-quiz-btn" type="button">Generate New Quiz</button>' : ""}
         ${canGenerateQuizNow ? '<button class="button solid" id="generate-quiz-from-summary-btn" type="button">Practice Quiz</button>' : ""}
         <button class="button ghost" id="new-upload-btn" type="button">Upload Another File</button>
       </div>
     </div>
   `, () => {
     if (showQuizBtn) {
-      document.getElementById("practice-quiz-btn").addEventListener("click", () => {
+      document.getElementById("practice-quiz-btn").addEventListener("click", async () => {
+        if (canRegenerateFromHistory) {
+          await generateFromHistorySession(session, "quiz");
+          return;
+        }
+        if (currentUploadId) {
+          await generateSelectedOutput("quiz");
+          return;
+        }
         openQuizModal(session.filename || "Uploaded file", session.quiz);
       });
     }
