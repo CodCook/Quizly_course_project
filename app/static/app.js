@@ -11,6 +11,7 @@ let currentUploadFilename = null;
 let loadingTipTimer = null;
 let panelTransitionTimer = null;
 const SESSION_HISTORY_STORAGE_KEY = "quizly.currentSessionHistory";
+const CLIENT_KEY_STORAGE_KEY = "quizly.clientKey";
 
 const LOADING_TIPS = {
   summary: [
@@ -34,6 +35,34 @@ const LOADING_TIPS = {
     "Almost there...",
   ],
 };
+
+function createClientKey() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+  return `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getClientKey() {
+  try {
+    const existing = window.localStorage.getItem(CLIENT_KEY_STORAGE_KEY);
+    if (existing) return existing;
+    const created = createClientKey();
+    window.localStorage.setItem(CLIENT_KEY_STORAGE_KEY, created);
+    return created;
+  } catch {
+    return createClientKey();
+  }
+}
+
+function apiFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set("X-Client-Key", getClientKey());
+  return fetch(url, {
+    ...options,
+    headers,
+  });
+}
 
 function getUploadElements() {
   return {
@@ -347,7 +376,7 @@ async function loadHistory() {
   historyList.innerHTML = '<li class="history-empty">Loading history...</li>';
 
   try {
-    const response = await fetch("/api/history");
+    const response = await apiFetch("/api/history");
     if (!response.ok) {
       throw new Error(`Failed to fetch history: ${response.statusText}`);
     }
@@ -355,6 +384,21 @@ async function loadHistory() {
     const payload = await response.json().catch(() => ({}));
     const dbSessions = Array.isArray(payload.sessions) ? payload.sessions : [];
     const localSessions = readSessionHistoryEntries();
+
+    const dbFilenameSet = new Set(
+      dbSessions
+        .map((session) => String(session.filename || "").trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    // If DB already has a file, don't also show a local temporary entry for it.
+    const filteredLocalSessions = localSessions.filter((session) => {
+      const hasSessionId = Boolean(String(session.session_id || "").trim());
+      if (hasSessionId) return true;
+      const filename = String(session.filename || "").trim().toLowerCase();
+      if (!filename) return true;
+      return !dbFilenameSet.has(filename);
+    });
 
     // Merge DB history with current-tab entries to keep freshly generated local state.
     const sessionMap = new Map();
@@ -364,7 +408,7 @@ async function loadHistory() {
         sessionMap.set(id, normalizeSession(session));
       }
     });
-    localSessions.forEach((session) => {
+    filteredLocalSessions.forEach((session) => {
       const id = String(session.id || "");
       if (!id) return;
       const existing = sessionMap.get(id);
@@ -377,12 +421,28 @@ async function loadHistory() {
       return bt - at;
     });
 
-    if (!sessions.length) {
+    // Final guard: collapse any remaining duplicates by filename.
+    const dedupedSessions = [];
+    const seenFileKeys = new Set();
+    sessions.forEach((session) => {
+      const fileKey = String(session.filename || "").trim().toLowerCase();
+      if (!fileKey) {
+        dedupedSessions.push(session);
+        return;
+      }
+      if (seenFileKeys.has(fileKey)) {
+        return;
+      }
+      seenFileKeys.add(fileKey);
+      dedupedSessions.push(session);
+    });
+
+    if (!dedupedSessions.length) {
       historyList.innerHTML = '<li class="history-empty">No history yet. Upload a file to get started.</li>';
       return;
     }
 
-    historyList.innerHTML = sessions
+    historyList.innerHTML = dedupedSessions
       .map((session) => {
         const label = session.filename || `Session #${session.id || "?"}`;
         return `
@@ -408,7 +468,7 @@ async function loadHistory() {
 async function loadSessionDetails(sessionId) {
   try {
     let session = null;
-    const response = await fetch(`/api/history/${encodeURIComponent(String(sessionId))}`);
+    const response = await apiFetch(`/api/history/${encodeURIComponent(String(sessionId))}`);
     if (response.ok) {
       session = normalizeSession(await response.json());
     } else {
@@ -498,7 +558,7 @@ async function generateFromHistorySession(session, action) {
     let response = null;
 
     if (persistentSessionId) {
-      response = await fetch(`/api/history/${persistentSessionId}/generate`, {
+      response = await apiFetch(`/api/history/${persistentSessionId}/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
@@ -506,14 +566,14 @@ async function generateFromHistorySession(session, action) {
 
       // Stale DB entry: fall back to current-server upload cache if available.
       if (response.status === 404 && uploadId) {
-        response = await fetch("/api/upload/generate", {
+        response = await apiFetch("/api/upload/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ upload_id: uploadId, action }),
         });
       }
     } else {
-      response = await fetch("/api/upload/generate", {
+      response = await apiFetch("/api/upload/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ upload_id: uploadId, action }),
@@ -646,19 +706,34 @@ function displayFlashcards(session) {
 
 function displayQuizReady(session) {
   const safeFileName = escapeHtml(session.filename || "Uploaded file");
+  const canRegenerateQuiz = Boolean(
+    session.session_id || (isUuidLike(session.id) ? session.id : "") || session.upload_id || currentUploadId
+  );
 
   renderUploadPanel(`
     <h2>Quiz Ready</h2>
     <div class="summary-display">
       <p class="summary-title"><strong>File:</strong> ${safeFileName}</p>
-      <p class="upload-text">Your quiz is ready. Start when you are ready.</p>
+      <p class="upload-text">Your quiz is ready. Generate a fresh one anytime.</p>
       <div class="summary-actions">
-        <button class="button solid" id="practice-quiz-btn" type="button">Practice Quiz</button>
+        <button class="button solid" id="practice-quiz-btn" type="button">Generate New Quiz</button>
         <button class="button ghost" id="new-upload-btn" type="button">Upload Another File</button>
       </div>
     </div>
   `, () => {
-    document.getElementById("practice-quiz-btn").addEventListener("click", () => {
+    document.getElementById("practice-quiz-btn").addEventListener("click", async () => {
+      if (canRegenerateQuiz) {
+        await generateFromHistorySession(
+          {
+            ...session,
+            session_id: session.session_id || (isUuidLike(session.id) ? session.id : ""),
+            upload_id: session.upload_id || currentUploadId || "",
+          },
+          "quiz"
+        );
+        return;
+      }
+
       openQuizModal(session.filename || "Uploaded file", session.quiz);
     });
     document.getElementById("new-upload-btn").addEventListener("click", resetUpload);
@@ -738,7 +813,7 @@ async function generateSelectedOutput(action) {
   try {
     startLoadingTips(action);
 
-    const response = await fetch("/api/upload/generate", {
+    const response = await apiFetch("/api/upload/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ upload_id: currentUploadId, action })
@@ -751,14 +826,17 @@ async function generateSelectedOutput(action) {
 
     const result = await response.json();
     const normalized = normalizeSession(result);
-    addSessionHistoryEntry({
+    const enrichedSession = {
       ...normalized,
-      upload_id: currentUploadId,
+      upload_id: currentUploadId || normalized.upload_id || "",
+    };
+    addSessionHistoryEntry({
+      ...enrichedSession,
     });
-    displaySessionOutput(normalized);
+    displaySessionOutput(enrichedSession);
 
-    if (action === "quiz" && normalized.quiz.length > 0) {
-      openQuizModal(normalized.filename || "Uploaded file", normalized.quiz);
+    if (action === "quiz" && enrichedSession.quiz.length > 0) {
+      openQuizModal(enrichedSession.filename || "Uploaded file", enrichedSession.quiz);
     }
 
     historyList.innerHTML = '<li class="history-empty">Updating history...</li>';
@@ -790,7 +868,7 @@ async function uploadFile(file) {
       browseButton.textContent = "Uploading...";
     }
 
-    const response = await fetch("/api/upload", {
+    const response = await apiFetch("/api/upload", {
       method: "POST",
       body: formData
     });

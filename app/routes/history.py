@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 import re
@@ -30,14 +30,14 @@ def _ensure_even_flashcards(flashcards: list[dict]) -> list[dict]:
 
 
 @router.get("/history")
-def fetch_all_history():
-    return {"sessions": get_all_study_sessions()}
+def fetch_all_history(x_client_key: str | None = Header(default=None)):
+    return {"sessions": get_all_study_sessions(client_key=x_client_key)}
 
 
 @router.get("/history/{session_id}")
-def fetch_history_item(session_id: str):
+def fetch_history_item(session_id: str, x_client_key: str | None = Header(default=None)):
     try:
-        session = get_study_session_by_id(session_id)
+        session = get_study_session_by_id(session_id, client_key=x_client_key)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -48,7 +48,11 @@ def fetch_history_item(session_id: str):
 
 
 @router.post("/history/{session_id}/generate")
-async def generate_from_history_item(session_id: str, payload: HistoryGenerateRequest):
+async def generate_from_history_item(
+    session_id: str,
+    payload: HistoryGenerateRequest,
+    x_client_key: str | None = Header(default=None),
+):
     if not _UUID_PATTERN.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid study session id")
 
@@ -57,7 +61,7 @@ async def generate_from_history_item(session_id: str, payload: HistoryGenerateRe
         raise HTTPException(status_code=400, detail="action must be one of: summary, quiz, flashcards")
 
     try:
-        session = get_study_session_by_id(session_id)
+        session = get_study_session_by_id(session_id, client_key=x_client_key)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     if not session:
@@ -94,21 +98,16 @@ async def generate_from_history_item(session_id: str, payload: HistoryGenerateRe
             "flashcards": flashcards,
         }
 
-    # First try combined generation; then fall back to action-specific generation.
-    try:
-        materials = await run_in_threadpool(generate_study_materials, text)
-    except Exception:
-        materials = {}
-
-    if not isinstance(materials, dict):
-        materials = {}
-
-    generated_summary = materials.get("summary", "") if isinstance(materials.get("summary", ""), str) else str(materials.get("summary", ""))
-    generated_quiz = materials.get("quiz", []) if isinstance(materials.get("quiz", []), list) else []
-    generated_flashcards = materials.get("flashcards", []) if isinstance(materials.get("flashcards", []), list) else []
-    generated_flashcards = _ensure_even_flashcards(generated_flashcards)
-
     if action == "summary":
+        try:
+            materials = await run_in_threadpool(generate_study_materials, text)
+        except Exception:
+            materials = {}
+
+        if not isinstance(materials, dict):
+            materials = {}
+
+        generated_summary = materials.get("summary", "") if isinstance(materials.get("summary", ""), str) else str(materials.get("summary", ""))
         if generated_summary.strip():
             summary = generated_summary.strip()
         else:
@@ -117,17 +116,25 @@ async def generate_from_history_item(session_id: str, payload: HistoryGenerateRe
             except Exception as exc:
                 raise HTTPException(status_code=500, detail=f"Failed to generate summary: {exc}")
     elif action == "quiz":
-        if generated_quiz:
-            quiz = generated_quiz
-        else:
-            try:
-                quiz = await run_in_threadpool(generate_quiz_from_text, text)
-            except Exception as exc:
-                raise HTTPException(status_code=500, detail=f"Failed to generate quiz: {exc}")
+        try:
+            quiz = await run_in_threadpool(generate_quiz_from_text, text)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to generate quiz: {exc}")
 
         if not quiz:
             raise HTTPException(status_code=500, detail="Failed to generate quiz")
     else:
+        try:
+            materials = await run_in_threadpool(generate_study_materials, text)
+        except Exception:
+            materials = {}
+
+        if not isinstance(materials, dict):
+            materials = {}
+
+        generated_flashcards = materials.get("flashcards", []) if isinstance(materials.get("flashcards", []), list) else []
+        generated_flashcards = _ensure_even_flashcards(generated_flashcards)
+
         if generated_flashcards:
             flashcards = generated_flashcards
         else:
@@ -147,6 +154,7 @@ async def generate_from_history_item(session_id: str, payload: HistoryGenerateRe
             summary=summary if action == "summary" else None,
             quiz=quiz if action == "quiz" else None,
             flashcards=flashcards if action == "flashcards" else None,
+            client_key=x_client_key,
         )
     except Exception:
         # Keep response successful even if persistence fails.
