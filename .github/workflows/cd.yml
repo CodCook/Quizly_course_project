@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CD
 
 on:
   push:
@@ -22,8 +22,10 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
-          pytest
+          python -m pytest
 
   CD:
     needs: CI
