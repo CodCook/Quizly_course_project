@@ -118,6 +118,7 @@ class _LazySupabase:
             key = (
                 os.getenv("SUPABASE_SECRET_KEY")
                 or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+                or os.getenv("SUPABASE_KEY")
                 or os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY")
             )
 
@@ -125,7 +126,7 @@ class _LazySupabase:
                 raise ValueError("SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL environment variable is required")
             if not key:
                 raise ValueError(
-                    "One of SUPABASE_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY, or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY is required"
+                    "One of SUPABASE_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_KEY, or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY is required"
                 )
 
             self._instance = SupabaseClient(url, key)

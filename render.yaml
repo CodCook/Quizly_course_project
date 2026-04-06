@@ -9,7 +9,7 @@ services:
     envVars:
       - key: SUPABASE_URL
         sync: false
-      - key: SUPABASE_KEY
+      - key: SUPABASE_SECRET_KEY
         sync: false
       - key: GEMINI_API_KEY
         sync: false

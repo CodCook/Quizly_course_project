@@ -15,9 +15,9 @@ def _ensure_model():
     if _model is None:
         import google.generativeai as genai
 
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not api_key:
-            raise ValueError("GEMINI_API_KEY environment variable is required")
+            raise ValueError("GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable is required")
 
         genai.configure(api_key=api_key)
         _model = genai.GenerativeModel("gemini-2.5-flash")
