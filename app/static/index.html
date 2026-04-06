@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=5" />
+    <link rel="stylesheet" href="/static/styles.css?v=9" />
   </head>
   <body>
     <div class="background-glow glow-a"></div>
@@ -22,30 +22,38 @@
         <p class="tagline">Turn your notes into summaries, quizzes, and flashcards</p>
       </header>
 
-      <section class="upload-panel reveal delay-1">
-        <h2>Upload Your Notes</h2>
-        <div class="upload-dropzone" id="dropzone">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="17 8 12 3 7 8"></polyline>
-            <line x1="12" y1="3" x2="12" y2="15"></line>
-          </svg>
-          <p class="upload-text">Drag and drop your PDF, DOCX, or PPTX file here</p>
-          <input type="file" id="file-input" accept=".pdf,.docx,.ppt,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden />
-          <button class="button solid" id="browse-button" type="button">Or browse files</button>
-        </div>
-        <div id="post-upload-actions" class="post-upload-actions hidden"></div>
+      <nav class="page-nav reveal delay-1" aria-label="Page selection">
+        <button class="button tiny page-nav-btn active" id="nav-main" type="button">Upload</button>
+        <button class="button tiny page-nav-btn" id="nav-history" type="button">History</button>
+      </nav>
+
+      <section class="page-view active reveal delay-1" id="main-view">
+        <section class="upload-panel">
+          <h2>Upload Your Notes</h2>
+          <div class="upload-dropzone" id="dropzone">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <p class="upload-text">Drag and drop your PDF, DOCX, or PPTX file here</p>
+            <input type="file" id="file-input" accept=".pdf,.docx,.ppt,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden />
+            <button class="button solid" id="browse-button" type="button">Or browse files</button>
+          </div>
+          <div id="post-upload-actions" class="post-upload-actions hidden"></div>
+        </section>
       </section>
 
-
-      <section class="history-panel reveal delay-2">
-        <div class="panel-header">
-          <h2>Recent Study History</h2>
-          <button class="button tiny" id="reload-history" type="button">Reload</button>
-        </div>
-        <ul id="history-list" class="history-list">
-          <li class="history-empty">Loading history...</li>
-        </ul>
+      <section class="page-view reveal delay-2" id="history-view">
+        <section class="history-panel">
+          <div class="panel-header">
+            <h2>Recent Study History</h2>
+            <button class="button tiny" id="reload-history" type="button">Reload</button>
+          </div>
+          <ul id="history-list" class="history-list">
+            <li class="history-empty">Loading history...</li>
+          </ul>
+        </section>
       </section>
     </main>
     
@@ -65,6 +73,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=5"></script>
+    <script src="/static/app.js?v=9"></script>
   </body>
 </html>
