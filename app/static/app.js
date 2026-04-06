@@ -6,6 +6,7 @@ let currentUploadId = null;
 let currentUploadFilename = null;
 let loadingTipTimer = null;
 let panelTransitionTimer = null;
+const SESSION_HISTORY_STORAGE_KEY = "quizly.currentSessionHistory";
 
 const LOADING_TIPS = {
   summary: [
@@ -249,20 +250,85 @@ function normalizeSession(session) {
   };
 }
 
+function readSessionHistoryEntries() {
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSessionHistoryEntries(entries) {
+  try {
+    window.sessionStorage.setItem(SESSION_HISTORY_STORAGE_KEY, JSON.stringify(entries));
+  } catch {
+    // Ignore sessionStorage failures; app can continue without sidebar persistence.
+  }
+}
+
+function initializeSessionHistory() {
+  // Treat each page load as a fresh user session for the sidebar history.
+  try {
+    window.sessionStorage.removeItem(SESSION_HISTORY_STORAGE_KEY);
+  } catch {
+    // Ignore storage access failures.
+  }
+}
+
+function addSessionHistoryEntry(session) {
+  const normalized = normalizeSession(session);
+  const id = normalized.session_id || normalized.id || normalized.upload_id || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const entry = {
+    id: String(id),
+    session_id: normalized.session_id ? String(normalized.session_id) : "",
+    upload_id: normalized.upload_id ? String(normalized.upload_id) : "",
+    filename: normalized.filename || "Uploaded file",
+    created_at: normalized.created_at || new Date().toISOString(),
+    summary: normalized.summary || "",
+    quiz: Array.isArray(normalized.quiz) ? normalized.quiz : [],
+    flashcards: Array.isArray(normalized.flashcards) ? normalized.flashcards : [],
+  };
+
+  const existing = readSessionHistoryEntries().filter((item) => String(item.id) !== String(entry.id));
+  existing.unshift(entry);
+  writeSessionHistoryEntries(existing);
+}
+
+function upsertSessionHistoryEntry(session) {
+  addSessionHistoryEntry(session);
+}
+
+function removeSessionHistoryEntry(session) {
+  const id = String(session?.id || "");
+  const sessionId = String(session?.session_id || "");
+  if (!id && !sessionId) return;
+
+  const remaining = readSessionHistoryEntries().filter((item) => {
+    const itemId = String(item?.id || "");
+    const itemSessionId = String(item?.session_id || "");
+    if (id && itemId === id) return false;
+    if (sessionId && itemSessionId === sessionId) return false;
+    return true;
+  });
+
+  writeSessionHistoryEntries(remaining);
+}
+
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
 async function loadHistory() {
   historyList.innerHTML = '<li class="history-empty">Loading history...</li>';
 
   try {
-    const response = await fetch("/api/history");
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const payload = await response.json();
-    const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+    const sessions = readSessionHistoryEntries();
 
     if (!sessions.length) {
-      historyList.innerHTML = '<li class="history-empty">No sessions yet. Upload your first document to get started.</li>';
+      historyList.innerHTML = '<li class="history-empty">No uploads in this session yet. Upload and generate to build your history.</li>';
       return;
     }
 
@@ -270,7 +336,7 @@ async function loadHistory() {
       .map((session) => {
         const label = session.filename || `Session #${session.id || "?"}`;
         return `
-          <li class="history-item" data-session-id="${session.id}">
+          <li class="history-item" data-session-id="${escapeHtml(String(session.id))}">
             <p class="history-item-title">${escapeHtml(label)}</p>
             <p class="history-item-time">${formatDate(session.created_at)}</p>
           </li>
@@ -291,15 +357,153 @@ async function loadHistory() {
 
 async function loadSessionDetails(sessionId) {
   try {
-    const response = await fetch(`/api/history/${sessionId}`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    const sessions = readSessionHistoryEntries();
+    const session = sessions.find((item) => String(item.id) === String(sessionId));
+
+    if (!session) {
+      throw new Error("Session not found in this browser session");
     }
 
-    const session = await response.json();
-    displaySessionOutput(normalizeSession(session));
+    showHistoryMaterialChooser(normalizeSession(session));
   } catch (error) {
     alert(`Error loading session: ${error.message}`);
+  }
+}
+
+function showHistoryMaterialChooser(session) {
+  const safeFileName = escapeHtml(session.filename || "Uploaded file");
+  const hasSummary = Boolean((session.summary || "").trim());
+  const hasQuiz = Array.isArray(session.quiz) && session.quiz.length > 0;
+  const hasFlashcards = Array.isArray(session.flashcards) && session.flashcards.length > 0;
+
+  renderUploadPanel(`
+    <h2>Choose Material</h2>
+    <div class="summary-display">
+      <p class="summary-title"><strong>File:</strong> ${safeFileName}</p>
+      <p class="upload-text">Select what you want to open from this file.</p>
+      <div class="summary-actions">
+        <button class="button ${hasSummary ? "solid" : "ghost"}" id="open-history-summary-btn" type="button">${hasSummary ? "Summary" : "Generate Summary"}</button>
+        <button class="button ${hasQuiz ? "solid" : "ghost"}" id="open-history-quiz-btn" type="button">${hasQuiz ? "Quiz" : "Generate Quiz"}</button>
+        <button class="button ${hasFlashcards ? "solid" : "ghost"}" id="open-history-flashcards-btn" type="button">${hasFlashcards ? "Flashcards" : "Generate Flashcards"}</button>
+        <button class="button ghost" id="new-upload-btn" type="button">Upload Another File</button>
+      </div>
+    </div>
+  `, () => {
+    const summaryBtn = document.getElementById("open-history-summary-btn");
+    const quizBtn = document.getElementById("open-history-quiz-btn");
+    const flashcardsBtn = document.getElementById("open-history-flashcards-btn");
+
+    if (summaryBtn) {
+      summaryBtn.addEventListener("click", async () => {
+        if (hasSummary) {
+          displaySessionSummary(session);
+          return;
+        }
+        await generateFromHistorySession(session, "summary");
+      });
+    }
+
+    if (quizBtn) {
+      quizBtn.addEventListener("click", async () => {
+        if (hasQuiz) {
+          displayQuizReady(session);
+          return;
+        }
+        await generateFromHistorySession(session, "quiz");
+      });
+    }
+
+    if (flashcardsBtn) {
+      flashcardsBtn.addEventListener("click", async () => {
+        if (hasFlashcards) {
+          displayFlashcards(session);
+          return;
+        }
+        await generateFromHistorySession(session, "flashcards");
+      });
+    }
+
+    document.getElementById("new-upload-btn").addEventListener("click", resetUpload);
+    hidePostUploadActions();
+  });
+}
+
+async function generateFromHistorySession(session, action) {
+  const persistentSessionId = session.session_id || (isUuidLike(session.id) ? session.id : "");
+  const uploadId = session.upload_id || "";
+
+  if (!persistentSessionId && !uploadId) {
+    alert("Cannot generate from this history item in this tab session.");
+    return;
+  }
+
+  try {
+    startLoadingTips(action);
+
+    let response = null;
+
+    if (persistentSessionId) {
+      response = await fetch(`/api/history/${persistentSessionId}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+
+      // Stale DB entry: fall back to current-server upload cache if available.
+      if (response.status === 404 && uploadId) {
+        response = await fetch("/api/upload/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ upload_id: uploadId, action }),
+        });
+      }
+    } else {
+      response = await fetch("/api/upload/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ upload_id: uploadId, action }),
+      });
+    }
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        removeSessionHistoryEntry(session);
+        await loadHistory();
+        throw new Error("This history item is no longer available. Please upload the file again.");
+      }
+
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Generation failed: ${response.statusText}`);
+    }
+
+    const generated = normalizeSession(await response.json());
+    const merged = {
+      ...session,
+      session_id: generated.session_id || session.session_id || persistentSessionId,
+      upload_id: session.upload_id || uploadId,
+      summary: action === "summary" ? generated.summary : session.summary,
+      quiz: action === "quiz" ? generated.quiz : session.quiz,
+      flashcards: action === "flashcards" ? generated.flashcards : session.flashcards,
+    };
+
+    upsertSessionHistoryEntry(merged);
+    await loadHistory();
+
+    if (action === "summary") {
+      displaySessionSummary(merged);
+    } else if (action === "quiz") {
+      displayQuizReady(merged);
+      if (Array.isArray(merged.quiz) && merged.quiz.length > 0) {
+        openQuizModal(merged.filename || "Uploaded file", merged.quiz);
+      }
+    } else {
+      displayFlashcards(merged);
+    }
+  } catch (error) {
+    alert(`Error: ${error.message}`);
+  } finally {
+    stopLoadingTips();
+    setGenerationLoading(false);
   }
 }
 
@@ -483,6 +687,10 @@ async function generateSelectedOutput(action) {
 
     const result = await response.json();
     const normalized = normalizeSession(result);
+    addSessionHistoryEntry({
+      ...normalized,
+      upload_id: currentUploadId,
+    });
     displaySessionOutput(normalized);
 
     if (action === "quiz" && normalized.quiz.length > 0) {
@@ -608,6 +816,7 @@ function setupDropzoneListeners() {
 }
 
 setupDropzoneListeners();
+initializeSessionHistory();
 
 let currentQuizQuestions = [];
 let userAnswers = {};
